@@ -26,7 +26,7 @@ import dmd.identifier;
 import dmd.mtype;
 import dmd.target;
 import dmd.tokens;
-import dmd.func : setUnsafe, setUnsafePreview;
+import dmd.func : CtorDeclaration, setUnsafe, setUnsafePreview;
 
 /*************************************************************
  * Check for unsafe access in @safe code:
@@ -133,6 +133,24 @@ bool checkUnsafeAccess(Scope* sc, Expression e, bool readonly, bool printmsg)
                 return true;
             }
         }
+    }
+    else if (CtorDeclaration c = dve.var.isCtorDeclaration())
+    {
+        if (dve.e1.op == EXP.structLiteral)
+            return false;
+
+        // Delegating or base class constructor call
+        if (sc.func.isCtorDeclaration()
+            && (dve.e1.op == EXP.this_ || dve.e1.op == EXP.super_))
+            return false;
+
+        //printf("sc.func is %sa CtorDeclaration\n", sc.func.isCtorDeclaration ? "".ptr : "not ".ptr);
+        //printf("dve.e1.op == %d\n", dve.e1.op);
+        // https://issues.dlang.org/show_bug.cgi?id=23780
+        // Direct calls to __ctor are unsafe because constructors may violate
+        // the guarantees of 'immutable' and 'const'.
+        sc.setUnsafe(!printmsg, e.loc,
+            "cannot access `%s` in `@safe` code", c.ident);
     }
     return false;
 }
